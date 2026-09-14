@@ -1,0 +1,14 @@
+pending/
+failed/
+archive/
+logs/
+events/
+testdata/
+inbox.jsonl
+outbox.jsonl
+progress.json
+state.json
+*.bak*
+*.log
+.env
+*.zip
