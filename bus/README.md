@@ -2,7 +2,7 @@
 
 A local, file-based job queue. An agent or script enqueues a job, a worker on your machine runs it with the **Grok Build CLI** (`grok`), and the result is written to an outbox plus a terminal DONE/FAIL event. The filesystem (`pending/`, `archive/`, `events/`) is the source of truth, so every job is inspectable and reproducible.
 
-Current bridge version: **1.2.7**. Windows-first (PowerShell 5.1+). Scheduled Task helpers are Windows-only.
+Current version: **2.0.0** (part of the [OTC Agent Coordination Kit](https://github.com/offtheclocktk-boop/otc-agent-kit)). Windows-first (PowerShell 5.1+). Scheduled Task helpers are Windows-only.
 
 See [SPEC.md](SPEC.md) for the formal job and file specification and [DESIGN-NOTES.md](DESIGN-NOTES.md) for the reasoning behind some of the hard-coded behavior.
 
@@ -108,7 +108,7 @@ Default (no `accept`): warn if `paths` are missing; fail on backticks in source 
 
 ## History
 
-- **1.2.7**: `-WorkDir` / `OTC_WORKDIR`, neutral worker prompt, `install.ps1`, guard for missing `USERPROFILE`.
+- **2.0.0**: scripts moved into `bus/` inside the kit repository (breaking path change); `-WorkDir` / `OTC_WORKDIR`, neutral worker prompt, `install.ps1`, guard for missing `USERPROFILE`.
 - **1.2.6**: `forbidContains` / `forbidRegex`, STOP files honored, enqueue sanitize and supersede guard, timing p50/p95, notify-install script.
 - **1.2.3**: exclusive enqueue via `FileMode.CreateNew`, `otc-status.ps1`, `otc-watch-install.ps1`, `pathsExist` vs `strictPaths` clarified.
 - **1.2.1**: `-MaxJobs`, `-Watch` / `-PollSec`, `failed/` after `maxAttempts`, `otc-wait.ps1`.

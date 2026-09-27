@@ -1,5 +1,7 @@
 # OTC Agent Coordination Kit
 
+Version 2.0.0 · [Releases](https://github.com/offtheclocktk-boop/otc-agent-kit/releases) · MIT license
+
 Two small, file-based tools for getting AI agents to hand work off reliably:
 
 1. **OTC Bus** ([`bus/`](bus/)): a local job bus. An agent enqueues a job, a worker on your machine runs it with the Grok Build CLI, and the requester gets a DONE/FAIL event. The filesystem is the source of truth.
@@ -42,8 +44,8 @@ Keeps your main assistant responsive by moving long implement/investigate/review
 ### Quick start (Windows PowerShell)
 
 ```powershell
-git clone <this-repo-url> otc-kit
-cd otc-kit
+git clone https://github.com/offtheclocktk-boop/otc-agent-kit.git
+cd otc-agent-kit
 powershell -NoProfile -ExecutionPolicy Bypass -File .\bus\install.ps1     # copies scripts to C:\OffTheClock\bus
 cd C:\OffTheClock\bus
 .\otc-enqueue.ps1 -Id demo-1 -Kind investigate -Task 'Reply with exactly: hello' -Done 'notes say hello'

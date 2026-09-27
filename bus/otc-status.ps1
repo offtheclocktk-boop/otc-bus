@@ -14,6 +14,6 @@ function Get-TimingStats([string]$Path,[int]$Window){ if(-not (Test-Path $Path))
 $state=$null; if(Test-Path $StatePath){ try{$state=Get-Content $StatePath -Raw -Encoding UTF8|ConvertFrom-Json}catch{} }
 $progress=$null; if(Test-Path $ProgressPath){ try{$progress=Get-Content $ProgressPath -Raw -Encoding UTF8|ConvertFrom-Json}catch{} }
 $pendingIds=@(Get-JsonFileIds $PendingDir); $failedIds=@(Get-JsonFileIds $FailedDir); $timing=Get-TimingStats $TimingPath $TimingWindow
-$bridge='1.2.7'; if($state -and $state.bridge){$bridge=[string]$state.bridge}
+$bridge='2.0.0'; if($state -and $state.bridge){$bridge=[string]$state.bridge}
 $obj=[ordered]@{bridge=$bridge;status=$(if($state -and $state.status){[string]$state.status}else{'unknown'});lastId=$(if($state){$state.lastId}else{$null});lastError=$(if($state){$state.lastError}else{$null});pending=$pendingIds.Count;failed=$failedIds.Count;pendingIds=$pendingIds;failedIds=$failedIds;phase=$(if($progress){[string]$progress.phase}else{$null});progressId=$(if($progress){$progress.id}else{$null});detail=$(if($progress){[string]$progress.detail}else{$null});watch=(Get-WatchState);timing=$timing;updatedAt=$(if($state){$state.updatedAt}else{$null})}
 Write-Output ($obj|ConvertTo-Json -Compress -Depth 6)

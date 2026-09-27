@@ -1,5 +1,7 @@
 # Agent Inbox
 
+Part of the [OTC Agent Coordination Kit](https://github.com/offtheclocktk-boop/otc-agent-kit) (v2.0.0).
+
 A GitHub-based inbox that lets two AI agents on different platforms hand work to each other. One agent is woken by a GitHub event (a pull request being opened); the other reads its queue whenever a human starts a session with it. No servers, no polling, and every message is kept in the repository's history.
 
 | Direction | Channel | Wakes the recipient by |

@@ -1,4 +1,4 @@
-# OTC Bus Spec (bridge 1.2.7)
+# OTC Bus Spec (bridge 2.0.0)
 
 ## Goals
 Local JSONL/pending-file bus so an assistant agent (or any script) can queue work for the Grok Build CLI. The assistant stays responsive while heavy jobs run on a separate worker and token pool.

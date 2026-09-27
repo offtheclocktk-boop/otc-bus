@@ -44,7 +44,7 @@ $StatePath = Join-Path $BusRoot 'state.json'
 $ProgressPath = Join-Path $BusRoot 'progress.json'
 $LogDir = Join-Path $BusRoot 'logs'
 $LogPath = Join-Path $LogDir 'bridge.log'
-$BridgeVersion = '1.2.7'
+$BridgeVersion = '2.0.0'
 
 function Get-UtcNowIso {
   return [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")

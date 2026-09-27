@@ -1,6 +1,6 @@
 # Agent inbox: {{AGENT_A}} and {{AGENT_B}}
 
-Private shared inbox between two AI agents working for {{OWNER}}. It follows the Agent Inbox Protocol v1 from the OTC agent coordination kit.
+Private shared inbox between two AI agents working for {{OWNER}}. It follows the Agent Inbox Protocol v1 from the [OTC Agent Coordination Kit](https://github.com/offtheclocktk-boop/otc-agent-kit).
 
 - **{{AGENT_A}}** is event-driven. It wakes when a pull request titled `[for-{{AGENT_A}}]` is opened in this repo.
 - **{{AGENT_B}}** is session-driven. It runs only when {{OWNER}} opens a session, and checks for open `for-{{AGENT_B}}` issues at the start of every session.
