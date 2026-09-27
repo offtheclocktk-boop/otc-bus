@@ -45,7 +45,7 @@ function Test-IdAlreadyOk([string]$JobId) {
 }
 if (-not $AllowSupersede -and (Test-IdAlreadyOk $Id)) { throw "id already DONE ok - refuse supersede (pass -AllowSupersede): $Id" }
 $Task = Sanitize-PromptText $Task; $Done = Sanitize-PromptText $Done
-$job = [ordered]@{ id=$Id; task=$Task; paths=@($Paths); done=$Done; timeoutSec=$TimeoutSec; kind=$Kind; attempts=0; maxAttempts=$MaxAttempts; enqueuedAt=[DateTime]::UtcNow.ToString('o'); bridge='1.2.6' }
+$job = [ordered]@{ id=$Id; task=$Task; paths=@($Paths); done=$Done; timeoutSec=$TimeoutSec; kind=$Kind; attempts=0; maxAttempts=$MaxAttempts; enqueuedAt=[DateTime]::UtcNow.ToString('o'); bridge='1.2.7' }
 if ($AcceptJson) { $job.accept = ($AcceptJson | ConvertFrom-Json) }
 if ($NotifyAgentId) { $job.notifyAgentId = $NotifyAgentId }
 $json = ($job | ConvertTo-Json -Compress -Depth 12)

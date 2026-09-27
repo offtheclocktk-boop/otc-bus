@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  OTC Bus bridge v1.2.1: pending/ job -> grok CLI -> outbox + archive.
+  OTC Bus bridge: pending/ job -> grok CLI -> outbox + archive.
 .PARAMETER Id
   Job id to process. If omitted, oldest pending job(s). Ignores -MaxJobs (single id).
 .PARAMETER Force
@@ -14,6 +14,9 @@
   After draining a cycle, poll pending every -PollSec until Ctrl+C / kill.
 .PARAMETER PollSec
   Watch idle poll interval seconds (default 5, min 2).
+.PARAMETER WorkDir
+  Working directory for the grok CLI. Resolution order: -WorkDir, then the
+  OTC_WORKDIR environment variable, then C:\OffTheClock if it exists, then the bus folder.
 #>
 [CmdletBinding()]
 param(
@@ -22,7 +25,8 @@ param(
   [switch]$Migrate,
   [int]$MaxJobs = 1,
   [switch]$Watch,
-  [int]$PollSec = 5
+  [int]$PollSec = 5,
+  [string]$WorkDir = ''
 )
 
 Set-StrictMode -Version Latest
@@ -40,7 +44,7 @@ $StatePath = Join-Path $BusRoot 'state.json'
 $ProgressPath = Join-Path $BusRoot 'progress.json'
 $LogDir = Join-Path $BusRoot 'logs'
 $LogPath = Join-Path $LogDir 'bridge.log'
-$BridgeVersion = '1.2.6'
+$BridgeVersion = '1.2.7'
 
 function Get-UtcNowIso {
   return [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -278,9 +282,24 @@ function Resolve-GrokCli {
   }
   $cmd = Get-Command $CliSpec -ErrorAction SilentlyContinue
   if ($cmd -and $cmd.Source) { return $cmd.Source }
-  $fallback = Join-Path $env:USERPROFILE '.grok\bin\grok.exe'
-  if (Test-Path -LiteralPath $fallback) { return $fallback }
+  if ($env:USERPROFILE) {
+    $fallback = Join-Path $env:USERPROFILE '.grok\bin\grok.exe'
+    if (Test-Path -LiteralPath $fallback) { return $fallback }
+  }
   return $null
+}
+
+function Resolve-WorkDir {
+  # -WorkDir > $env:OTC_WORKDIR > C:\OffTheClock (legacy default, if present) > bus folder
+  foreach ($candidate in @($WorkDir, $env:OTC_WORKDIR)) {
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+      if (Test-Path -LiteralPath $candidate) { return (Resolve-Path -LiteralPath $candidate).Path }
+      Write-LogLine ("workdir not found, ignoring: {0}" -f $candidate)
+    }
+  }
+  $legacy = 'C:\OffTheClock'
+  if (Test-Path -LiteralPath $legacy) { return $legacy }
+  return $BusRoot
 }
 
 function Get-PathTokensFromText {
@@ -320,7 +339,7 @@ function Build-Prompt {
   if ($Job.PSObject.Properties.Name -contains 'kind' -and $Job.kind) { $kind = [string]$Job.kind }
   $task = [string]$Job.task
   $body = @"
-You are Grok Build working for Off the Clock.
+You are Grok Build working a queued job from OTC Bus.
 Job kind: $kind
 Working files of interest: $pathsText
 Definition of done: $doneText
@@ -755,9 +774,7 @@ function Invoke-OneJob {
   }
   Write-LogLine ("id={0} bridge={1} prompt={2}" -f $jobId, $BridgeVersion, ($promptForLog -replace "[\r\n]+", ' '))
 
-  $workDir = $BusRoot
-  $parent = 'C:\OffTheClock'
-  if (Test-Path -LiteralPath $parent) { $workDir = $parent }
+  $workDir = Resolve-WorkDir
 
   $run = Invoke-GrokWithTimeout -Exe $grokExe -Prompt $prompt -WorkingDirectory $workDir -TimeoutSec $timeoutSec -JobId $jobId -StateRef $State
 

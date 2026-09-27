@@ -1,7 +1,7 @@
-# OTC Bus Spec 1.2.1
+# OTC Bus Spec (bridge 1.2.7)
 
 ## Goals
-Local JSONL/pending-file bus so Grok Bot can queue work for Grok Build CLI (dual token pool).
+Local JSONL/pending-file bus so an assistant agent (or any script) can queue work for the Grok Build CLI. The assistant stays responsive while heavy jobs run on a separate worker and token pool.
 
 ## Layout
 ```
@@ -27,6 +27,7 @@ bus/
 - `-MaxJobs <n>` process up to N pending jobs per cycle (FIFO). Default 1. `0` = unlimited
 - `-Watch` after draining, poll pending every `-PollSec` until Ctrl+C / kill
 - `-PollSec <n>` watch idle interval (default 5, min 2). Re-migrates inbox each wake
+- `-WorkDir <path>` working directory for `grok` (else `$env:OTC_WORKDIR`, else `C:\OffTheClock` if present, else the bus folder)
 
 ## Retries / failed/
 On soft fail (`ok=false`): increment `attempts` on pending JSON. When `attempts >= maxAttempts` (job field, default 2), move to `failed/{id}.json`. Successful jobs still archive to `archive/inbox/`.
@@ -41,19 +42,24 @@ While grok runs, bridge refreshes `progress.json` and `state.updatedAt` about ev
 Optional job.accept:
 ```json
 {
-  "pathsExist": ["C:\\path\\file.lua"],
-  "noBacktickIn": ["C:\\path\\file.lua"],
-  "fileContains": [{"path":"C:\\path\\file.lua","text":"1.1.0"}],
+  "pathsExist": ["C:\\work\\app\\src\\main.py"],
+  "noBacktickIn": ["C:\\work\\app\\src\\main.py"],
+  "fileContains": [{"path":"C:\\work\\app\\src\\version.py","text":"1.1.0"}],
+  "forbidContains": [{"path":"C:\\work\\app\\src\\main.py","text":"TODO"}],
+  "forbidRegex": [{"path":"C:\\work\\app\\src\\main.py","pattern":"print\\("}],
   "strictPaths": true
 }
 ```
-Default: warn if `paths` missing; fail on backticks in `.lua` paths.
+Default: warn if `paths` missing; fail on backticks in source files listed in `paths` (`.lua .ps1 .py .js .ts .tsx .jsx .cs .cpp .h .java .go .rs`).
 
 ## Job fields
-`id`, `task`, `paths[]`, `done`, `timeoutSec`, `kind` (`implement`|`investigate`|`review`), `accept`, `attempts` (default 0), `maxAttempts` (default 2)
+`id`, `task`, `paths[]`, `done`, `timeoutSec`, `kind` (`implement`|`investigate`|`review`), `accept`, `attempts` (default 0), `maxAttempts` (default 2), `notifyAgentId` (optional)
 
 ## Wait helper
 `otc-wait.ps1 -Id <id> [-TimeoutSec 600] [-PollSec 2]`: exit 0 if `ok=true`, 1 if `ok=false`, 2 on timeout. Prints result JSON to stdout.
+
+## STOP files
+If `failed/{id}.STOP.txt` exists, the bridge archives the pending job without running it and emits a failed terminal event (`STOP: <reason>`). `otc-enqueue.ps1` refuses to enqueue that id. `-Force` does not override a STOP file.
 
 ## Idempotency
 If outbox already has `ok=true` for id, bridge archives pending and exits 0 without re-calling grok.
@@ -64,4 +70,4 @@ On every terminal job outcome (success, exhausted fail, idempotent success), `ot
 - `events/terminal.jsonl` (append)
 - `events/terminal-{id}.json` (latest per id)
 
-This is bridge code, not an agent reminder. Consumers (Grok Bot routine, Watch sidecar, external tools) read those files. Optional job field `notifyAgentId` is recorded on the event for routers.
+This is bridge code, not an agent reminder. Consumers (an assistant routine, `otc-notify-drain.ps1`, external tools) read those files. Optional job field `notifyAgentId` is recorded on the event for routers.

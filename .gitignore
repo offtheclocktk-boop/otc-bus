@@ -8,7 +8,9 @@ inbox.jsonl
 outbox.jsonl
 progress.json
 state.json
+NOTIFY-LATEST.txt
 *.bak*
 *.log
 .env
+.env.*
 *.zip
