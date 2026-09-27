@@ -5,7 +5,7 @@
 .NOTES
   Terminal success: ok=true (exit 0)
   Terminal failure: failed/{id}.json exists, or ok=false with no pending retry (exit 1)
-  Soft-fail while pending/{id}.json still exists is NOT terminal — keep polling.
+  Soft-fail while pending/{id}.json still exists is NOT terminal - keep polling.
   Timeout: exit 2
 #>
 [CmdletBinding()]
@@ -70,7 +70,7 @@ while ($true) {
     exit 1
   }
 
-  # Soft-fail: outbox has ok=false but pending still exists for retry — keep waiting
+  # Soft-fail: outbox has ok=false but pending still exists for retry - keep waiting
   if ($obj -and ($obj.ok -eq $false) -and (-not $stillPending)) {
     Write-Output ($obj | ConvertTo-Json -Compress -Depth 12)
     exit 1

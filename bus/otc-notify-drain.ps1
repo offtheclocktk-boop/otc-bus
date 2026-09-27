@@ -2,7 +2,7 @@
 <#
 .SYNOPSIS
   Drain bus terminal events into a human-readable NOTIFY-LATEST.txt (and optional webhook POST).
-  Hard product companion to otc-bridge Emit-TerminalEvent — not an agent memory.
+  Hard product companion to otc-bridge Emit-TerminalEvent - not an agent memory.
 #>
 [CmdletBinding()]
 param(
