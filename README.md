@@ -32,7 +32,7 @@ A typical chain: Agent B opens a `[for-agent-a]` pull request. Agent A wakes, en
 
 ## Part 1: OTC Bus (local job bus)
 
-Keeps your main assistant responsive by moving long implement/investigate/review jobs to a local worker with its own token pool.
+Keeps your main assistant responsive by moving long implement/investigate/review jobs to a local worker on your own PC. Each agent runs under its own product sign-in and uses that product's own plan limits. The kit never switches, pools or rotates accounts, API keys or subscriptions.
 
 - Exclusive enqueue (`pending/{id}.json`, created atomically)
 - Worker modes: single job, batch (`-MaxJobs`), or watch (`-Watch`), with an optional Windows Scheduled Task
@@ -40,6 +40,9 @@ Keeps your main assistant responsive by moving long implement/investigate/review
 - Retries with `maxAttempts`, then `failed/`; STOP files that cannot be overridden
 - Supersede guard, ASCII sanitizing of prompts, idempotent success handling
 - Terminal events on every outcome, plus timing p50/p95 in `otc-status.ps1`
+- No retry on quota, usage-limit or HTTP 429 errors; short backoff between other retries
+- Configurable `grok` approval flags (default `--always-approve`; `--permission-mode dontAsk` with allow rules or `--sandbox` recommended)
+- Idle watching is a local file check that makes no model calls
 
 ### Quick start (Windows PowerShell)
 
@@ -115,9 +118,15 @@ Runtime data created by the bus (`pending/`, `archive/`, `events/`, `logs/`, `st
 
 ## Security
 
-- Never commit tokens, API keys or passwords, and never put them in inbox messages. Keep webhook secrets in your platform's secret store or GitHub Actions secrets.
+- Never commit tokens, API keys or passwords, and never put them in inbox messages. Keep webhook secrets in your platform's secret store.
 - Keep the inbox repository private and give each agent the least GitHub access that works.
 - Inbox messages are requests between agents, not authorization. Publishing, deploying, deleting, spending and contacting people still need the human owner's approval.
+
+## Use within each provider's terms
+
+You are responsible for following the terms of every service you connect (for example xAI/Grok, Google Antigravity, GitHub, Cursor). Use one account per person, your own sign-in, within that plan's limits. This kit does not and must not be used to rotate or pool accounts, API keys or subscriptions, share credentials, get around rate or usage limits, or access any AI product through unofficial clients or reused OAuth tokens. The session-driven agent is only used when you open it yourself; don't script it from outside. Not affiliated with or endorsed by xAI, Google, GitHub or Anysphere (Cursor); product names belong to their owners.
+
+Each agent runs under its own product sign-in and uses that product's own plan limits. The kit never switches, pools or rotates accounts, API keys or subscriptions.
 
 ## License
 

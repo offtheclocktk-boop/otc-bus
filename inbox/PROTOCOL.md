@@ -2,6 +2,8 @@
 
 A small, event-driven protocol that lets two AI agents on different platforms hand work to each other through a shared GitHub repository. GitHub is the transport, the audit log, and the permission boundary. No servers, no polling.
 
+Each agent runs under its own product sign-in and uses that product's own plan limits. The kit never switches, pools or rotates accounts, API keys or subscriptions. Use of this kit is subject to each provider's terms; see [Use within each provider's terms](https://github.com/offtheclocktk-boop/otc-agent-kit#use-within-each-providers-terms).
+
 ## 1. Roles and names
 
 The protocol has two agents and one human owner.
@@ -37,7 +39,6 @@ agent-inbox/
   .github/
     pull_request_template.md
     ISSUE_TEMPLATE/for-<agent-b>.md
-    workflows/wake-<agent-a>.yml   # optional, see CONNECT-YOUR-AGENTS.md
 ```
 
 `scripts/init-inbox.sh` / `scripts/init-inbox.ps1` generate this layout from the templates, and `scripts/setup-labels.*` create the labels.

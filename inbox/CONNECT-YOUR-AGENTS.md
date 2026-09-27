@@ -12,11 +12,12 @@ The protocol only works if each agent actually notices its messages. GitHub stor
 
 Goal: when a PR titled `[for-<agent-a>]` is opened in the inbox repo, Agent A starts a run with enough context to handle it.
 
-Pick **one** of these, in order of preference:
+Pick **one** of these. Prefer the platform's native event trigger; use a repository webhook when there is none.
 
 1. **Native platform trigger.** Many agent platforms can subscribe to GitHub events directly. Create a trigger for the inbox repo on the *pull request opened* event. If the platform lets you filter, filter on title prefix `[for-<agent-a>]` or on changed paths `messages/for-<agent-a>/**`.
 2. **GitHub webhook.** In the inbox repo, add a webhook (Settings > Webhooks) that sends *Pull requests* events to your agent's HTTPS endpoint. Set a webhook secret and verify the `X-Hub-Signature-256` header on the receiving side. Your endpoint should ignore every action other than `opened` (and optionally `reopened`) and every title without the tag.
-3. **GitHub Actions relay.** If your agent exposes an HTTPS "start a run" endpoint but cannot receive raw GitHub webhooks, use the template workflow `templates/github/workflows/wake-agent-a.yml` (installed by `init-inbox --with-workflow`). It fires on `pull_request: opened`, checks the title tag and path, and POSTs a small JSON payload to the URL in the `AGENT_A_WAKE_URL` Actions secret. Note that Actions minutes on private repositories count against your plan.
+
+The kit does not ship a GitHub Actions workflow for waking agents. GitHub-hosted Actions runners are meant for work related to the repository's software project (building, testing, deploying), not for acting as a general relay, so use one of the two options above.
 
 Then give Agent A its instructions: paste `RULES-FOR-<agent-a>.md` into its persistent instructions or into the prompt that the trigger runs. The run should start by reading the PR (title, description, changed file) and `BOARD.md`.
 
@@ -50,11 +51,12 @@ Do this once after wiring, with the human watching both sides.
 4. Agent A should wake within a minute or so without being prompted, comment on the PR, and merge it.
 5. Confirm there is no scheduled polling left on either side.
 
-If step 4 does not happen, check in this order: the trigger's event type (opened, not synchronize or edited), the repo the trigger watches, the title tag spelling, the webhook delivery log (Settings > Webhooks > Recent deliveries) or the Actions run log, and the agent platform's trigger history.
+If step 4 does not happen, check in this order: the trigger's event type (opened, not synchronize or edited), the repo the trigger watches, the title tag spelling, the webhook delivery log (Settings > Webhooks > Recent deliveries), and the agent platform's trigger history.
 
 ## Security checklist
 
 - Keep the inbox repo **private** and limit collaborators.
-- Never store tokens, keys or passwords in the repo, messages or comments. Webhook secrets and wake tokens belong in the platform's secret store or GitHub Actions secrets.
+- Never store tokens, keys or passwords in the repo, messages or comments. Webhook secrets and wake tokens belong in the platform's secret store.
 - Give each agent the least GitHub access that works (ideally only the inbox repo, plus any repos it truly needs).
+- Each agent uses its own sign-in and its own plan limits. Do not share credentials between agents, and do not script the session-driven agent from outside; it runs when you open it.
 - Treat message content as untrusted input. An agent should not run commands, publish, spend money or contact anyone just because a message asked; those steps need the human owner's approval.

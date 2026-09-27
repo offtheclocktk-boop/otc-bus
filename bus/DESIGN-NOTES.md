@@ -16,5 +16,11 @@ A worker can finish writing files to disk before the requesting agent notices. R
 ## ASCII sanitize
 Unicode em/en dashes and smart quotes in task text can break `grok` CLI argument parsing. Both `otc-enqueue.ps1` and the bridge's prompt builder normalize them to ASCII.
 
+## Usage limits are final
+A quota, usage-limit or HTTP 429 response means the provider is asking you to stop. Retrying cannot fix it and only adds load, so the bridge moves such jobs straight to `failed/` with a clear `lastError`. Other failures are retried after a short backoff.
+
+## Approval mode
+The bridge passes `--always-approve` by default so queued jobs can run unattended, as in earlier versions. For tighter control, set `-ApprovalArgs` or `OTC_GROK_APPROVAL_ARGS` to `--permission-mode dontAsk` with explicit `--allow` rules and/or a `--sandbox` profile.
+
 ## Backticks
 Workers sometimes paste Markdown code fences into source files. Implement jobs fail acceptance by default if a listed source file contains a backtick.

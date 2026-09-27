@@ -4,19 +4,18 @@
 #
 # Usage:
 #   ./init-inbox.sh --dir PATH --agent-a coordinator --agent-b builder \
-#       [--owner "the owner"] [--repo OWNER/REPO] [--with-workflow] [--force]
+#       [--owner "the owner"] [--repo OWNER/REPO] [--force]
 #
-# --with-workflow  also write .github/workflows/wake-<agent-a>.yml (webhook wake-up)
-# --force          overwrite files that already exist in PATH
+# --force  overwrite files that already exist in PATH
 set -euo pipefail
 shopt -u patsub_replacement 2>/dev/null || true
 
-usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 tpl="$script_dir/../templates"
 
-dir=""; agent_a=""; agent_b=""; owner="the owner"; repo="OWNER/agent-inbox"; with_workflow=0; force=0
+dir=""; agent_a=""; agent_b=""; owner="the owner"; repo="OWNER/agent-inbox"; force=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir) dir="${2:-}"; shift 2 ;;
@@ -24,7 +23,6 @@ while [ $# -gt 0 ]; do
     --agent-b) agent_b="${2:-}"; shift 2 ;;
     --owner) owner="${2:-}"; shift 2 ;;
     --repo) repo="${2:-}"; shift 2 ;;
-    --with-workflow) with_workflow=1; shift ;;
     --force) force=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -66,9 +64,6 @@ render message.md messages/_TEMPLATE.md
 mkdir -p "$dir/messages/for-${agent_a}" && touch "$dir/messages/for-${agent_a}/.gitkeep"
 render github/pull_request_template.md .github/pull_request_template.md
 render github/ISSUE_TEMPLATE/for-agent-b.md ".github/ISSUE_TEMPLATE/for-${agent_b}.md"
-if [ "$with_workflow" -eq 1 ]; then
-  render github/workflows/wake-agent-a.yml ".github/workflows/wake-${agent_a}.yml"
-fi
 
 cat <<NEXT
 

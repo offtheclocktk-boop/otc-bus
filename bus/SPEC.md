@@ -1,7 +1,7 @@
 # OTC Bus Spec (bridge 2.0.0)
 
 ## Goals
-Local JSONL/pending-file bus so an assistant agent (or any script) can queue work for the Grok Build CLI. The assistant stays responsive while heavy jobs run on a separate worker and token pool.
+Local JSONL/pending-file bus so an assistant agent (or any script) can queue work for the Grok Build CLI on your own PC. The assistant stays responsive while longer jobs run in a local worker. Each agent runs under its own product sign-in and uses that product's own plan limits. The kit never switches, pools or rotates accounts, API keys or subscriptions.
 
 ## Layout
 ```
@@ -27,13 +27,19 @@ bus/
 - `-MaxJobs <n>` process up to N pending jobs per cycle (FIFO). Default 1. `0` = unlimited
 - `-Watch` after draining, poll pending every `-PollSec` until Ctrl+C / kill
 - `-PollSec <n>` watch idle interval (default 5, min 2). Re-migrates inbox each wake
+- `-ApprovalArgs <args[]>` grok permission flags placed before `-p` (else `$env:OTC_GROK_APPROVAL_ARGS` as a JSON array or space-separated string, else `--always-approve`)
 - `-WorkDir <path>` working directory for `grok` (else `$env:OTC_WORKDIR`, else `C:\OffTheClock` if present, else the bus folder)
 
 ## Retries / failed/
-On soft fail (`ok=false`): increment `attempts` on pending JSON. When `attempts >= maxAttempts` (job field, default 2), move to `failed/{id}.json`. Successful jobs still archive to `archive/inbox/`.
+On soft fail (`ok=false`): increment `attempts` on pending JSON and set `retryAfter` (UTC) to now + 30 s x attempts, capped at 300 s. Jobs whose `retryAfter` is in the future are skipped by drain cycles (an explicit `-Id` still runs them). When `attempts >= maxAttempts` (job field, default 2), move to `failed/{id}.json`. Successful jobs still archive to `archive/inbox/`.
+
+**No retry on usage limits.** If `grok` failed (non-zero exit or empty output) and its output matches a quota, usage-limit, rate-limit or HTTP 429 message, the job moves straight to `failed/` after that single attempt, and `state.lastError` starts with `usage/rate limit (quota or HTTP 429) - not retried:`.
 
 ## Stale lock
 If `state.status=running` and `updatedAt` older than 20 minutes, lock is treated as stale (or use `-Force`). Busy lock is checked only at start of a run (not between jobs in a multi-job cycle).
+
+## Watch mode cost
+Watch mode is a local file check: every `-PollSec` seconds it lists `pending/`. No model is called while idle, so idle watching uses no tokens. The worker only runs jobs that were queued into `pending/` by the user or by an agent acting for the user.
 
 ## Heartbeat
 While grok runs, bridge refreshes `progress.json` and `state.updatedAt` about every 15s.

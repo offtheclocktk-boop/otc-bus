@@ -5,8 +5,6 @@
 .DESCRIPTION
   Nothing is pushed; review the output, then commit it to your private inbox repo.
   Existing files are skipped unless -Force is given.
-.PARAMETER WithWorkflow
-  Also write .github/workflows/wake-<AgentA>.yml (webhook wake-up via GitHub Actions).
 .EXAMPLE
   .\init-inbox.ps1 -Dir ..\..\..\agent-inbox -AgentA coordinator -AgentB builder -Owner 'Sam' -Repo sam/agent-inbox
 #>
@@ -17,7 +15,6 @@ param(
   [Parameter(Mandatory)][string]$AgentB,
   [string]$Owner = 'the owner',
   [string]$Repo = 'OWNER/agent-inbox',
-  [switch]$WithWorkflow,
   [switch]$Force
 )
 Set-StrictMode -Version Latest
@@ -59,9 +56,6 @@ $keep = Join-Path $keepDir '.gitkeep'
 if (-not (Test-Path -LiteralPath $keep)) { [System.IO.File]::WriteAllText($keep, '', $utf8) }
 Write-Rendered 'github/pull_request_template.md' '.github/pull_request_template.md'
 Write-Rendered 'github/ISSUE_TEMPLATE/for-agent-b.md' (".github/ISSUE_TEMPLATE/for-{0}.md" -f $AgentB)
-if ($WithWorkflow) {
-  Write-Rendered 'github/workflows/wake-agent-a.yml' (".github/workflows/wake-{0}.yml" -f $AgentA)
-}
 
 Write-Host ''
 Write-Host 'Next steps:'

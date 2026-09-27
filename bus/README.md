@@ -4,6 +4,8 @@ A local, file-based job queue. An agent or script enqueues a job, a worker on yo
 
 Current version: **2.0.0** (part of the [OTC Agent Coordination Kit](https://github.com/offtheclocktk-boop/otc-agent-kit)). Windows-first (PowerShell 5.1+). Scheduled Task helpers are Windows-only.
 
+Each agent runs under its own product sign-in and uses that product's own plan limits. The kit never switches, pools or rotates accounts, API keys or subscriptions. The worker only runs jobs that you, or an agent acting for you, put in `pending/`. Use of this kit is subject to each provider's terms; see [Use within each provider's terms](https://github.com/offtheclocktk-boop/otc-agent-kit#use-within-each-providers-terms).
+
 See [SPEC.md](SPEC.md) for the formal job and file specification and [DESIGN-NOTES.md](DESIGN-NOTES.md) for the reasoning behind some of the hard-coded behavior.
 
 ## Install (Windows)
@@ -38,7 +40,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\bus\install.ps1 -Destinati
 | Script | Role |
 |------|------|
 | `otc-enqueue.ps1` | Enqueue helper (exclusive `CreateNew`, ASCII sanitize, supersede guard) |
-| `otc-bridge.ps1` | Worker (`-Id`, `-MaxJobs`, `-Watch`, `-WorkDir`) |
+| `otc-bridge.ps1` | Worker (`-Id`, `-MaxJobs`, `-Watch`, `-WorkDir`, `-ApprovalArgs`) |
 | `otc-wait.ps1` | Wait for a result by id (exit 0 ok / 1 fail / 2 timeout) |
 | `otc-status.ps1` | Compact status JSON including timing p50/p95 |
 | `otc-events-tail.ps1` | Print recent terminal events |
@@ -46,6 +48,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\bus\install.ps1 -Destinati
 | `otc-watch-install.ps1` | Scheduled Task `OTC-Bus-Watch` (worker in watch mode at logon) |
 | `otc-notify-install.ps1` | Scheduled Task `OTC-Bus-Notify-Drain` |
 | `install.ps1` | Copy the scripts into an install folder |
+| `tests/e2e.ps1` | End-to-end test with a stand-in `grok` (no model calls) |
 
 ## Enqueue and run
 
@@ -75,6 +78,32 @@ cd C:\OffTheClock\bus
 4. the bus folder itself
 
 Point it at the root of the project(s) your jobs work on.
+
+### Approval mode (grok permissions)
+
+By default the bridge runs `grok --always-approve --no-plan -p <prompt>`, so queued jobs run unattended exactly as in earlier versions. You can replace the approval flags:
+
+1. `-ApprovalArgs` on `otc-bridge.ps1`, for example `-ApprovalArgs '--sandbox','workspace'`
+2. the `OTC_GROK_APPROVAL_ARGS` environment variable, as a JSON array (use this when a value contains spaces) or a space-separated string
+3. default: `--always-approve`
+
+**Recommended:** instead of approving everything, use `--permission-mode dontAsk` with explicit `--allow` rules (anything not allowed is refused), and/or an OS-level `--sandbox` profile (`workspace` or `strict`):
+
+```powershell
+$env:OTC_GROK_APPROVAL_ARGS = '["--permission-mode","dontAsk","--allow","Read","--allow","Grep","--allow","Bash(git *)","--sandbox","workspace"]'
+.\otc-bridge.ps1
+```
+
+For the Scheduled Task (`otc-watch-install.ps1`), set `OTC_GROK_APPROVAL_ARGS` as a user environment variable so the task picks it up. See the Grok Build documentation on permissions and sandbox profiles for the full rule syntax.
+
+### Retries and usage limits
+
+- A failed job is retried up to `maxAttempts` (default 2), after a backoff of 30 s per attempt so far (capped at 5 minutes). Drain cycles skip jobs that are still inside their backoff window; `-Id <id>` runs one immediately.
+- If `grok` fails with a quota, usage-limit, rate-limit or HTTP 429 message, the job is **not retried**. It moves straight to `failed/` and `state.json` `lastError` starts with `usage/rate limit (quota or HTTP 429) - not retried:`. Wait for your plan's limit to reset, then re-enqueue it.
+
+### Watch mode uses no tokens while idle
+
+`-Watch` (and the `OTC-Bus-Watch` Scheduled Task) only lists the local `pending/` folder every `-PollSec` seconds. No model is called until a job is actually waiting, so idle watching costs nothing.
 
 ### Notifying the requester
 
@@ -108,7 +137,7 @@ Default (no `accept`): warn if `paths` are missing; fail on backticks in source 
 
 ## History
 
-- **2.0.0**: scripts moved into `bus/` inside the kit repository (breaking path change); `-WorkDir` / `OTC_WORKDIR`, neutral worker prompt, `install.ps1`, guard for missing `USERPROFILE`.
+- **2.0.0**: scripts moved into `bus/` inside the kit repository (breaking path change); configurable approval flags (`-ApprovalArgs` / `OTC_GROK_APPROVAL_ARGS`); no retry on quota, usage-limit or HTTP 429 errors; retry backoff; `-WorkDir` / `OTC_WORKDIR`; neutral worker prompt; `install.ps1`; `tests/e2e.ps1`.
 - **1.2.6**: `forbidContains` / `forbidRegex`, STOP files honored, enqueue sanitize and supersede guard, timing p50/p95, notify-install script.
 - **1.2.3**: exclusive enqueue via `FileMode.CreateNew`, `otc-status.ps1`, `otc-watch-install.ps1`, `pathsExist` vs `strictPaths` clarified.
 - **1.2.1**: `-MaxJobs`, `-Watch` / `-PollSec`, `failed/` after `maxAttempts`, `otc-wait.ps1`.

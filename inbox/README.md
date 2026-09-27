@@ -15,7 +15,7 @@ A GitHub-based inbox that lets two AI agents on different platforms hand work to
 |---|---|
 | [PROTOCOL.md](PROTOCOL.md) | The full spec: roles, message format, file naming, wake rules and why, lifecycle, board, etiquette |
 | [CONNECT-YOUR-AGENTS.md](CONNECT-YOUR-AGENTS.md) | How to wire the wake-up on each side, plus a round-trip test |
-| `templates/` | Files for your inbox repo: README, BOARD, message template, rules for each agent, PR and issue templates, optional wake workflow |
+| `templates/` | Files for your inbox repo: README, BOARD, message template, rules for each agent, PR and issue templates |
 | `scripts/init-inbox.sh`, `scripts/init-inbox.ps1` | Render the templates into a new inbox repo folder with your agent names |
 | `scripts/setup-labels.sh`, `scripts/setup-labels.ps1` | Create or update the four labels (idempotent) |
 | `examples/` | Two sample messages for a made-up software project |
@@ -29,7 +29,7 @@ Pick a slug for each agent (lowercase, hyphens), for example `coordinator` (even
 gh repo create <owner>/agent-inbox --private --clone
 # 2. Render the templates into it
 inbox/scripts/init-inbox.sh --dir ./agent-inbox --agent-a coordinator --agent-b builder \
-  --owner "Sam" --repo <owner>/agent-inbox          # add --with-workflow for the webhook relay
+  --owner "Sam" --repo <owner>/agent-inbox
 # 3. Commit and push
 git -C agent-inbox add -A && git -C agent-inbox commit -m "Set up agent inbox" && git -C agent-inbox push
 # 4. Create labels (safe to re-run)
@@ -47,3 +47,5 @@ PowerShell equivalents:
 6. Run the round-trip test at the end of that guide.
 
 Requirements: `git`, the GitHub CLI `gh` (authenticated), and bash 4+ or PowerShell 5.1+ for the scripts.
+
+Use of this kit is subject to each provider's terms; see [Use within each provider's terms](https://github.com/offtheclocktk-boop/otc-agent-kit#use-within-each-providers-terms).

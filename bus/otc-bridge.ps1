@@ -17,6 +17,11 @@
 .PARAMETER WorkDir
   Working directory for the grok CLI. Resolution order: -WorkDir, then the
   OTC_WORKDIR environment variable, then C:\OffTheClock if it exists, then the bus folder.
+.PARAMETER ApprovalArgs
+  grok permission flags passed before -p. Resolution order: -ApprovalArgs, then the
+  OTC_GROK_APPROVAL_ARGS environment variable (JSON array, or space-separated), then the
+  default '--always-approve'. Safer options: '--permission-mode dontAsk' with '--allow' rules,
+  and/or '--sandbox workspace|strict'.
 #>
 [CmdletBinding()]
 param(
@@ -26,7 +31,8 @@ param(
   [int]$MaxJobs = 1,
   [switch]$Watch,
   [int]$PollSec = 5,
-  [string]$WorkDir = ''
+  [string]$WorkDir = '',
+  [string[]]$ApprovalArgs = $null
 )
 
 Set-StrictMode -Version Latest
@@ -45,6 +51,12 @@ $ProgressPath = Join-Path $BusRoot 'progress.json'
 $LogDir = Join-Path $BusRoot 'logs'
 $LogPath = Join-Path $LogDir 'bridge.log'
 $BridgeVersion = '2.0.0'
+$DefaultApprovalArgs = @('--always-approve')
+# Output that means the provider refused the call (quota / usage limit / rate limit).
+# Such jobs are never retried: retrying cannot help and only adds load.
+$UsageLimitPattern = '(?i)\b429\b|too many requests|rate[ _-]?limit|usage[ _-]?limit|quota|insufficient_quota|limit (has been |was )?reached'
+$RetryBackoffSec = 30      # per attempt so far: 30s, 60s, 90s ...
+$RetryBackoffMaxSec = 300
 
 function Get-UtcNowIso {
   return [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -302,6 +314,33 @@ function Resolve-WorkDir {
   return $BusRoot
 }
 
+function Resolve-ApprovalArgs {
+  # -ApprovalArgs > $env:OTC_GROK_APPROVAL_ARGS > default (--always-approve)
+  if ($null -ne $ApprovalArgs) { return @($ApprovalArgs | Where-Object { $_ -ne '' }) }
+  $raw = $env:OTC_GROK_APPROVAL_ARGS
+  if ($null -ne $raw) {
+    $raw = $raw.Trim()
+    if ($raw.StartsWith('[')) { return @($raw | ConvertFrom-Json | ForEach-Object { [string]$_ }) }
+    return @($raw -split '\s+' | Where-Object { $_ -ne '' })
+  }
+  return $DefaultApprovalArgs
+}
+
+function Test-UsageLimitText {
+  param([string]$Text)
+  if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
+  return [regex]::IsMatch($Text, $UsageLimitPattern)
+}
+
+function Test-RetryDeferred {
+  param([Parameter(Mandatory)]$Job)
+  if (-not ($Job.PSObject.Properties.Name -contains 'retryAfter') -or -not $Job.retryAfter) { return $false }
+  try {
+    $t = [DateTime]::Parse([string]$Job.retryAfter, $null, [Globalization.DateTimeStyles]::RoundtripKind)
+    return ($t.ToUniversalTime() -gt [DateTime]::UtcNow)
+  } catch { return $false }
+}
+
 function Get-PathTokensFromText {
   param([string]$Text)
   if ([string]::IsNullOrWhiteSpace($Text)) { return @() }
@@ -452,7 +491,8 @@ function Invoke-GrokWithTimeout {
     [Parameter(Mandatory)][string]$WorkingDirectory,
     [Parameter(Mandatory)][int]$TimeoutSec,
     [Parameter(Mandatory)][string]$JobId,
-    [Parameter(Mandatory)]$StateRef
+    [Parameter(Mandatory)]$StateRef,
+    [string[]]$CliArgs = @()
   )
 
   $tempRoot = $env:TEMP
@@ -466,13 +506,14 @@ function Invoke-GrokWithTimeout {
     [System.IO.File]::WriteAllText($promptFile, $Prompt, [System.Text.UTF8Encoding]::new($false))
 
     $job = Start-Job -ScriptBlock {
-      param($Exe, $PromptFile, $WorkingDirectory, $OutFile, $ErrFile, $CodeFile)
+      param($Exe, $PromptFile, $WorkingDirectory, $OutFile, $ErrFile, $CodeFile, $CliArgs)
       Set-Location -LiteralPath $WorkingDirectory
       $promptText = [System.IO.File]::ReadAllText($PromptFile, [System.Text.UTF8Encoding]::new($false))
       $stdout = ''
       $stderr = ''
       try {
-        $all = & $Exe --always-approve --no-plan -p $promptText 2>&1
+        $cliArgs = @($CliArgs)
+        $all = & $Exe @cliArgs --no-plan -p $promptText 2>&1
         $exit = $LASTEXITCODE
         $outLines = New-Object System.Collections.Generic.List[string]
         $errLines = New-Object System.Collections.Generic.List[string]
@@ -493,7 +534,7 @@ function Invoke-GrokWithTimeout {
       [System.IO.File]::WriteAllText($OutFile, $stdout, [System.Text.UTF8Encoding]::new($false))
       [System.IO.File]::WriteAllText($ErrFile, $stderr, [System.Text.UTF8Encoding]::new($false))
       [System.IO.File]::WriteAllText($CodeFile, ([string]$exit), [System.Text.UTF8Encoding]::new($false))
-    } -ArgumentList $Exe, $promptFile, $WorkingDirectory, $outFile, $errFile, $codeFile
+    } -ArgumentList $Exe, $promptFile, $WorkingDirectory, $outFile, $errFile, $codeFile, @($CliArgs)
 
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSec)
     while ($true) {
@@ -617,10 +658,12 @@ function Handle-SoftFail {
     [Parameter(Mandatory)]$Job,
     [Parameter(Mandatory)][string]$JobId,
     [Parameter(Mandatory)]$State,
-    [string]$ErrorDetail
+    [string]$ErrorDetail,
+    [switch]$NoRetry
   )
   $attempts = (Get-JobAttempts -Job $Job) + 1
   $maxAttempts = Get-JobMaxAttempts -Job $Job
+  if ($NoRetry) { $maxAttempts = $attempts }
   $Job | Add-Member -NotePropertyName attempts -NotePropertyValue $attempts -Force
   if (-not ($Job.PSObject.Properties.Name -contains 'maxAttempts')) {
     $Job | Add-Member -NotePropertyName maxAttempts -NotePropertyValue $maxAttempts -Force
@@ -638,11 +681,13 @@ function Handle-SoftFail {
     if ($Job.PSObject.Properties.Name -contains 'notifyAgentId' -and $Job.notifyAgentId) { $notifyId = [string]$Job.notifyAgentId }
     Emit-TerminalEvent -JobId $JobId -Ok $false -Detail $ErrorDetail -NotifyAgentId $notifyId
   } else {
+    $delay = [Math]::Min($RetryBackoffMaxSec, $RetryBackoffSec * $attempts)
+    $Job | Add-Member -NotePropertyName retryAfter -NotePropertyValue ([DateTime]::UtcNow.AddSeconds($delay).ToString('yyyy-MM-ddTHH:mm:ssZ')) -Force
     if ($pendingPath) {
       Write-PendingJob -Job $Job -PendingPath $pendingPath
     }
     Write-ProgressObject -JobId $JobId -Phase 'retry' -Detail ("attempts={0}/{1} {2}" -f $attempts, $maxAttempts, $ErrorDetail)
-    Write-LogLine ("{0} soft-fail keep pending attempts={1}/{2}" -f $JobId, $attempts, $maxAttempts)
+    Write-LogLine ("{0} soft-fail keep pending attempts={1}/{2} retryInSec={3}" -f $JobId, $attempts, $maxAttempts, $delay)
     $State.status = 'idle'
   }
 
@@ -776,7 +821,9 @@ function Invoke-OneJob {
 
   $workDir = Resolve-WorkDir
 
-  $run = Invoke-GrokWithTimeout -Exe $grokExe -Prompt $prompt -WorkingDirectory $workDir -TimeoutSec $timeoutSec -JobId $jobId -StateRef $State
+  $approval = @(Resolve-ApprovalArgs)
+  Write-LogLine ("id={0} grok args: {1}" -f $jobId, ($approval -join ' '))
+  $run = Invoke-GrokWithTimeout -Exe $grokExe -Prompt $prompt -WorkingDirectory $workDir -TimeoutSec $timeoutSec -JobId $jobId -StateRef $State -CliArgs $approval
 
   $stdout = ''
   if ($run.StdOut) { $stdout = [string]$run.StdOut }
@@ -845,13 +892,21 @@ function Invoke-OneJob {
 
   $errDetail = $stderrTrim
   if (-not $errDetail) { $errDetail = "grok failed exit=$exitCode" }
+  # Only inspect output when grok itself failed (not when only acceptance checks failed).
+  $grokFailed = ($exitCode -ne 0) -or [string]::IsNullOrWhiteSpace($stdoutTrim)
+  $usageLimited = $grokFailed -and ((Test-UsageLimitText -Text $stderr) -or (Test-UsageLimitText -Text $stdout))
+  if ($usageLimited) {
+    $short = ($errDetail -replace '[\r\n]+', ' ')
+    if ($short.Length -gt 300) { $short = $short.Substring(0, 300) }
+    $errDetail = 'usage/rate limit (quota or HTTP 429) - not retried: ' + $short
+  }
   $nextAttempts = (Get-JobAttempts -Job $Job) + 1
   $maxAttemptsNow = Get-JobMaxAttempts -Job $Job
-  if ($nextAttempts -ge $maxAttemptsNow) {
+  if ($usageLimited -or ($nextAttempts -ge $maxAttemptsNow)) {
     $archOut = Join-Path $ArchiveOutboxDir ($jobId + '.json')
     [System.IO.File]::WriteAllText($archOut, ($result | ConvertTo-Json -Compress -Depth 12), [System.Text.UTF8Encoding]::new($false))
   }
-  Handle-SoftFail -Job $Job -JobId $jobId -State $State -ErrorDetail $errDetail
+  Handle-SoftFail -Job $Job -JobId $jobId -State $State -ErrorDetail $errDetail -NoRetry:$usageLimited
   return 1
 }
 
@@ -913,6 +968,16 @@ function Invoke-DrainCycle {
     }
     $code = Invoke-OneJob -Job $job -State $State
     return @{ Processed = 1; LastExit = $code; Idle = $false }
+  }
+
+  $deferred = @($jobs | Where-Object { Test-RetryDeferred -Job $_ })
+  if ($deferred.Count -gt 0) {
+    $jobs = @($jobs | Where-Object { -not (Test-RetryDeferred -Job $_) })
+  }
+  if ($jobs.Count -eq 0 -and $deferred.Count -gt 0) {
+    Write-ProgressObject -JobId '' -Phase 'idle' -Detail ("retry backoff: {0} job(s) waiting" -f $deferred.Count)
+    Write-Host ("idle (retry backoff: {0})" -f (($deferred | ForEach-Object { [string]$_.id }) -join ','))
+    return @{ Processed = 0; LastExit = 0; Idle = $true }
   }
 
   if ($jobs.Count -eq 0) {
